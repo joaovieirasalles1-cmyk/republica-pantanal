@@ -48,6 +48,7 @@ Esse projeto herda automaticamente o tom de voz e contexto definidos em `_memori
 
 ## Publicação (produção)
 
+- Código: https://github.com/joaovieirasalles1-cmyk/republica-pantanal (privado, branch `main`; a raiz do repo é esta pasta)
 - Site: https://republica-pantanal.vercel.app (Vercel, projeto `republica-pantanal`, função em `pdx1`)
 - Banco: Supabase, projeto "App Rep" (`fulbqmfhffmtyqeephed`, us-west-2), schema `republica`, usuário `republica_app`. Arquivos no bucket privado `republica-arquivos`
 - Chaves só em `app/.env.production.local` (local, fora do git) e nas variáveis da Vercel. Regravar na Vercel: `node deploy/vercel-env.mjs` (não usar `vercel env add` pelo PowerShell: corrompe os valores)

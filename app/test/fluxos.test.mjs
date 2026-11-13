@@ -225,6 +225,16 @@ try {
   const pt = await ana.post('/api/push/test');
   ok(pt.devices === 0 && pt.sent === 0, 'teste de push responde (sem aparelho registrado)');
 
+  console.log('\nCorreções da revisão');
+  const semAmb = await jose.post(`${H}/occurrences`, { type_label: 'Lixo na porta', environment_id: null, ref_date: today, to_all: true });
+  ok(semAmb.id && (await jose.get(`${H}/occurrences/${semAmb.id}`)).environment === null, 'ocorrência na "Casa toda" (sem ambiente) é registrada');
+  ok((await jose.post(`${H}/occurrences`, { type_label: 'X', ref_date: '2026-02-31' })).status === 400, 'data que não existe (31/02) é recusada');
+  ok((await ana.post(`${H}/expenses`, { title: 'Falsa', category: 'caixinha', total_cents: 100, split: false })).id &&
+    !(await ana.get(`${H}/caixinha`)).months.some(m => m.title === 'Falsa'), 'conta manual não entra como caixinha');
+  const t2 = await jose.post(`${H}/tasks`, { name: 'Varrer', recurrence: 'daily', due_time: '23:00', start_date: today, assign_mode: 'fixed', fixed_member_id: J });
+  const [c1, c2] = await Promise.all([1, 2].map(() => jose.post(`${H}/tasks/${t2.id}/complete`, { date: today })));
+  ok(c1.status === 200 && c2.status === 200, 'dois toques ao mesmo tempo em "Concluir" não dão erro');
+
   console.log(`\n${passed} verificações passaram.\n`);
 } catch (e) {
   console.error('\n✗ FALHOU:', e.message);

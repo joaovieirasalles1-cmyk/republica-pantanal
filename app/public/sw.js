@@ -1,6 +1,6 @@
 // Service worker: guarda a casca do app (abre mesmo com conexão ruim) e mostra as notificações
 // quando o app está fechado (iPhone: só com HTTPS + app adicionado à Tela de Início).
-const CACHE = 'republica-v4';
+const CACHE = 'republica-v5';
 const SHELL = ['/', '/index.html', '/app.js', '/ui.js', '/icons.js', '/styles.css', '/manifest.webmanifest', '/brand/logo.webp', '/brand/badge.webp', '/brand/icon-192.png'];
 
 self.addEventListener('install', e => {

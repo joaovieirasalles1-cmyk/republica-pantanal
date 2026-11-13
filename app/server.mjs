@@ -5,8 +5,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { one, all, run as dbRun, tx, DATA_DIR } from './lib/db.mjs';
-import { localNow, zonedToUtc, addDays, weekday, isDate, isTime, isValidTz, WEEKDAYS_SHORT, deadlineLabel, fmtHour } from './lib/time.mjs';
+import { one, all, run as dbRun, tx, DATA_DIR, isUniqueError } from './lib/db.mjs';
+import { localNow, zonedToUtc, addDays, weekday, isDate, isTime, isValidTz, WEEKDAYS_SHORT, deadlineLabel } from './lib/time.mjs';
 import { instancesInRange, getInstance, occurrenceIndex, occursOn } from './lib/schedule.mjs';
 import { notify, pushPublicKey, sendPush, pushCount, pending } from './lib/notify.mjs';
 import { putFile, getFile } from './lib/storage.mjs';
@@ -16,7 +16,20 @@ const reqStore = new AsyncLocalStorage();
 const filterAsync = async (arr, fn) => { const ok = await Promise.all(arr.map(fn)); return arr.filter((_, i) => ok[i]); };
 const everyAsync = async (arr, fn) => (await Promise.all(arr.map(fn))).every(Boolean);
 // toda escrita em moradores limpa o cache da requisição
-const run = async (sql, ...p) => { if (/\bmembers\b/i.test(sql)) reqStore.getStore()?.members?.clear(); return await dbRun(sql, ...p); };
+const run = async (sql, ...p) => {
+  const st = reqStore.getStore();
+  if (/\bmembers\b/i.test(sql)) st?.members?.clear();
+  if (/\b(environments|rules)\b/i.test(sql)) st?.memo?.clear();
+  return await dbRun(sql, ...p);
+};
+// guarda o resultado durante a requisição (ambientes e regras se repetem em cada cartão)
+const memo = async (key, fn) => {
+  const st = reqStore.getStore();
+  if (!st) return fn();
+  const m = (st.memo ||= new Map());
+  if (!m.has(key)) m.set(key, fn().catch(e => { m.delete(key); throw e; }));
+  return m.get(key);
+};
 const ON_VERCEL = !!process.env.VERCEL;
 
 const PORT = +process.env.PORT || 3000;
@@ -155,8 +168,8 @@ async function canSeeOccPhoto(occ, me) {
   return me.can_review || occ.reported_by === me.id || occ.assigned_member_id === me.id || !occ.assigned_member_id || (await occParties(occ.id)).has(me.id);
 }
 async function occView(occ, ctx) {
-  const env = occ.environment_id ? await one('SELECT name, icon FROM environments WHERE id = ?', occ.environment_id) : null;
-  const rule = occ.rule_id ? await one('SELECT id, title, deadline_time, subject FROM rules WHERE id = ?', occ.rule_id) : null;
+  const env = occ.environment_id ? (await envMap(ctx.house.id)).get(occ.environment_id) || null : null;
+  const rule = occ.rule_id ? await ruleById(occ.rule_id) : null;
   const v = {
     ...occ, environment: env, rule,
     deadline: rule?.deadline_time ? deadlineLabel(occ.ref_date, rule.deadline_time) : null,
@@ -171,16 +184,18 @@ async function occEvent(occId, actor, action, fromS, toS, extra = {}) {
   await run('INSERT INTO occurrence_events (occurrence_id, actor_id, action, from_status, to_status, from_member, to_member, note, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
     occId, actor, action, fromS, toS, extra.from_member ?? null, extra.to_member ?? null, extra.note ?? null, now());
 }
+const ruleById = id => memo(`rule:${id}`, () => one('SELECT id, title, deadline_time, subject FROM rules WHERE id = ?', id));
 const occSubject = async occ => {
-  const rule = occ.rule_id ? await one('SELECT subject FROM rules WHERE id = ?', occ.rule_id) : null;
+  const rule = occ.rule_id ? await ruleById(occ.rule_id) : null;
   return `${rule?.subject || occ.type_label.toLowerCase()} de ${WEEKDAYS_SHORT[weekday(occ.ref_date)]}`;
 };
 
 // ---------- compras: fila ----------
+const activeIds = async houseId => new Set((await houseMembers(houseId)).filter(m => m.active).map(m => m.id));
 async function shopNext(item, houseId) {
   const parts = parse(item.participants, []);
   if (!parts.length) return null;
-  const active = new Set((await all('SELECT id FROM members WHERE house_id = ? AND active = 1', houseId)).map(r => r.id));
+  const active = await activeIds(houseId);
   for (let i = 0; i < parts.length; i++) {
     const mid = parts[(item.next_index + i) % parts.length];
     if (active.has(mid)) return mid;
@@ -190,7 +205,7 @@ async function shopNext(item, houseId) {
 async function shopAdvance(item, houseId) {
   const parts = parse(item.participants, []);
   const credits = parse(item.credits, {});
-  const active = new Set((await all('SELECT id FROM members WHERE house_id = ? AND active = 1', houseId)).map(r => r.id));
+  const active = await activeIds(houseId);
   let idx = item.next_index;
   // pula quem está inativo e quem adiantou a própria vez (consome o crédito)
   for (let guard = 0; guard < parts.length * 3; guard++) {
@@ -228,7 +243,7 @@ async function instView(inst, ctx, envs) {
     weekday: WEEKDAYS_SHORT[weekday(inst.date)],
   };
 }
-const envMap = async houseId => new Map((await all('SELECT id, name, icon FROM environments WHERE house_id = ?', houseId)).map(e => [e.id, e]));
+const envMap = houseId => memo(`env:${houseId}`, async () => new Map((await all('SELECT id, name, icon FROM environments WHERE house_id = ?', houseId)).map(e => [e.id, e])));
 
 async function validateTask(b, ctx) {
   const t = {
@@ -676,7 +691,12 @@ route('POST', '/api/h/:hid/tasks/:tid/complete', async ctx => {
   if (inst.completion) return { ok: true, already: true };
   const photo = await ownFile(ctx, ctx.body.photo_file_id, ['task']);
   need(!inst.require_photo || photo, 'Esta tarefa pede uma foto para concluir.', 400);
-  await run('INSERT INTO task_completions (task_id, date, member_id, completed_at, photo_file_id) VALUES (?,?,?,?,?)', inst.task_id, date, inst.assignee || ctx.me.id, now(), photo);
+  try {
+    await run('INSERT INTO task_completions (task_id, date, member_id, completed_at, photo_file_id) VALUES (?,?,?,?,?)', inst.task_id, date, inst.assignee || ctx.me.id, now(), photo);
+  } catch (e) {
+    if (isUniqueError(e)) return { ok: true, already: true }; // dois toques ao mesmo tempo
+    throw e;
+  }
   return { ok: true };
 });
 
@@ -1154,7 +1174,8 @@ route('POST', '/api/h/:hid/expenses', async ctx => {
   need(title, 'Dê um nome à despesa.', 400);
   need(total > 0, 'Informe o valor total.', 400);
   need(!b.due_date || isDate(b.due_date), 'Vencimento inválido.', 400);
-  const category = b.category in CATEGORIES && b.category !== 'compra' ? b.category : 'outro';
+  // "compra" e "caixinha" são geradas pelo próprio app (uma conta manual de caixinha bagunçaria o saldo)
+  const category = b.category in CATEGORIES && !['compra', 'caixinha'].includes(b.category) ? b.category : 'outro';
   const shares = (Array.isArray(b.shares) ? b.shares : []).map(s => ({ member_id: int(s.member_id), amount_cents: int(s.amount_cents) }));
   // sem divisão = só arquivar a conta (ex.: luz paga pelo caixa) — com fatura e comprovante
   if (b.split !== false) {
@@ -1296,6 +1317,7 @@ route('POST', '/api/h/:hid/shop/items/:id/purchase', async ctx => {
   need(amount === null || amount > 0, 'Valor inválido.', 400);
   const receipt = await ownFile(ctx, b.receipt_file_id, ['purchase']);
   const turnOf = countsAs === 'own' ? me.id : next;
+  need(turnOf, 'Ninguém da fila deste item está na casa. Edite os participantes antes.', 400);
   const result = await tx(async () => {
     let state;
     if (countsAs === 'turn') state = await shopAdvance(item, h.id);
@@ -1324,7 +1346,7 @@ route('POST', '/api/h/:hid/shop/items/:id/purchase', async ctx => {
   const view = await shopView(after, ctx);
   const myName = await memberName(h.id, me.id);
   if (item.alerted_by && item.alerted_by !== me.id)
-    await notify(h.id, item.alerted_by, { kind: 'shop', title: `${item.name} comprado`, body: `${myName} comprou. Próxima vez: ${view.next_name}.`, link: `/compras/${item.id}` });
+    await notify(h.id, item.alerted_by, { kind: 'shop', title: `${item.name} comprado`, body: view.next_name ? `${myName} comprou. Próxima vez: ${view.next_name}.` : `${myName} comprou.`, link: `/compras/${item.id}` });
   if (next && next !== me.id && countsAs === 'turn')
     await notify(h.id, next, { kind: 'shop', title: `${myName} comprou por você`, body: `A compra contou como a sua vez de ${item.name}.`, link: `/compras/${item.id}` });
   if (result.expense_id && item.payment_mode === 'split')
@@ -1460,8 +1482,9 @@ async function handle(req, res) {
           if (prev.status === null) return sendJson(res, 409, { error: 'Essa ação ainda está sendo processada.' });
           return sendJson(res, prev.status, JSON.parse(prev.body));
         }
+        try { await run('INSERT INTO idempotency (key, user_id, created_at) VALUES (?,?,?)', String(k).slice(0, 80), userId, now()); }
+        catch (e) { if (isUniqueError(e)) return sendJson(res, 409, { error: 'Essa ação ainda está sendo processada.' }); throw e; }
         idemKey = String(k).slice(0, 80);
-        await run('INSERT INTO idempotency (key, user_id, created_at) VALUES (?,?,?)', idemKey, userId, now());
       }
     }
     const out = await r.handler(ctx);

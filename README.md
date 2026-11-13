@@ -12,7 +12,7 @@ app/
   lib/              banco (SQLite local / Postgres no Supabase), escala, notificações, arquivos
   public/           front-end (HTML/CSS/JS puro, PWA com service worker)
   test/             testes de ponta a ponta pela API
-  deploy/           scripts de Supabase, migração, variáveis da Vercel e teste do site publicado
+  deploy/           chaves do Supabase (supabase-existing), variáveis da Vercel e teste do site publicado
   seed.mjs          dados de exemplo (npm run demo) ou versão limpa (--limpo)
 identidade/         logo original, sem fundo e o script que gerou os ícones
 ```

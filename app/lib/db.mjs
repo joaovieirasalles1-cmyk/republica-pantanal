@@ -220,4 +220,3 @@ export const all = (sql, ...p) => impl.all(sql, p);
 export const run = (sql, ...p) => impl.run(sql, p);
 export const tx = fn => impl.tx(fn);
 export const isUniqueError = e => e && (e.code === '23505' || /UNIQUE|duplicate key/i.test(String(e.message)));
-export const rawDb = () => impl;

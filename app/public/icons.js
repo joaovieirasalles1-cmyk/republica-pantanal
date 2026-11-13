@@ -64,7 +64,6 @@ const P = {
   wifi: '<path d="M2 8.8a15 15 0 0 1 20 0M5 12.6a10 10 0 0 1 14 0M8.5 16.4a5 5 0 0 1 7 0M12 20h.01"/>',
   building: '<rect x="5" y="2.5" width="14" height="19" rx="1.5"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01M9 15h.01M15 15h.01M10 21.5v-3h4v3"/>',
 };
-export const ICON_KEYS = Object.keys(P);
 export const ENV_ICONS = ['home', 'kitchen', 'bath', 'sofa', 'laundry', 'leaf', 'bed', 'car', 'book', 'paw'];
 export const SHOP_ICONS = ['droplet', 'flame', 'roll', 'bottle', 'sponge', 'coffee', 'bread', 'milk', 'salt', 'trash', 'cart'];
 

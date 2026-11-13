@@ -58,7 +58,12 @@ export function weekday(dateStr) { // 0 = domingo
   return new Date(dateStr + 'T00:00:00Z').getUTCDay();
 }
 
-export function isDate(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)); }
+// recusa datas que não existem (ex.: 2026-02-31, que o Date.parse aceitaria virando 3 de março)
+export function isDate(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(s + 'T00:00:00Z');
+  return !isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
+}
 export function isTime(s) { return typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/.test(s); }
 
 export const WEEKDAYS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];

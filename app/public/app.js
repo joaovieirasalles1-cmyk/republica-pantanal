@@ -164,7 +164,7 @@ function occurrenceFlow() {
   sheet(sh => {
     const crumbs = () => [st.env && st.env.name, st.label, st.ref && `referente a ${relDay(st.ref, today())}`, st.who === 'todos' ? 'para todos' : st.who === null ? 'sem atribuição' : st.who && member(st.who)?.name].filter(Boolean).map(esc).join(' → ');
     const stepEnv = () => sh.render(`<h2>Registrar ocorrência</h2><p class="muted">Onde foi?</p>
-      <div class="opts">${S.H.environments.map(e => `<button class="opt" data-act="env" data-id="${e.id}"><span class="ico">${I(e.icon)}</span>${esc(e.name)}</button>`).join('')}</div>
+      <div class="opts">${S.H.environments.map(e => `<button class="opt" data-act="env" data-id="${e.id}"><span class="ico">${I(e.icon)}</span>${esc(e.name)}</button>`).join('')}<button class="opt" data-act="env" data-id=""><span class="ico">${I('home')}</span>Casa toda</button></div>
       <div class="actions"><button class="btn" data-close>Cancelar</button></div>`);
     const stepWhat = () => {
       const rules = S.H.rules.filter(r => r.environment_id === st.env.id || !r.environment_id);
@@ -206,7 +206,8 @@ function occurrenceFlow() {
       up = uploader($('#up', sh.el), { hid: S.hid, kind: 'occurrence' });
     };
     bindActs(sh.el, {
-      env(b) { st.env = S.H.environments.find(e => e.id === +b.dataset.id); stepWhat(); },
+      // "Casa toda" (ou casa sem ambientes cadastrados): a ocorrência fica sem ambiente
+      env(b) { st.env = S.H.environments.find(e => e.id === +b.dataset.id) || { id: null, name: 'casa' }; stepWhat(); },
       rule(b) { st.rule = S.H.rules.find(r => r.id === +b.dataset.id); st.label = st.rule.occurrence_label || st.rule.title; stepDay(); },
       other() { $('#other', sh.el).hidden = false; $('#ot', sh.el).focus(); },
       otherok() { const v = $('#ot', sh.el).value.trim(); if (!v) return toast('Escreva o que aconteceu.', { error: true }); st.rule = null; st.label = v; stepDay(); },

@@ -1,0 +1,20 @@
+# dependências
+node_modules/
+
+# dados locais (banco SQLite, anexos, chaves de push)
+app/data/
+app/data-prod/
+
+# segredos: chaves do Supabase, Vercel, VAPID, tokens
+.env*
+**/.env*
+!**/.env.example
+
+# Vercel (link local do projeto)
+.vercel/
+**/.vercel/
+
+# sistema / editores
+.DS_Store
+Thumbs.db
+*.log

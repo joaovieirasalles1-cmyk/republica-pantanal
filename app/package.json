@@ -1,0 +1,24 @@
+{
+  "name": "republica",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MVP para organizar a rotina de repúblicas universitárias",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.mjs",
+    "demo": "node --disable-warning=ExperimentalWarning seed.mjs",
+    "test": "node --disable-warning=ExperimentalWarning test/fluxos.test.mjs",
+    "https": "node --disable-warning=ExperimentalWarning tunnel.mjs"
+  },
+  "optionalDependencies": {
+    "web-push": "^3.6.7"
+  },
+  "dependencies": {
+    "@vercel/functions": "^1.5.2",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4"
+  }
+}

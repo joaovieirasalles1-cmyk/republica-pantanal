@@ -1,0 +1,9 @@
+data
+node_modules
+test
+.env*
+tunnel.mjs
+*.bat
+deploy
+seed.mjs
+data-prod

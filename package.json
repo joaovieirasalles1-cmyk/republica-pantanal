@@ -1,0 +1,6 @@
+{
+  "name": "republica-pantanal",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm install --prefix app --no-audit --no-fund",
+  "buildCommand": "",
+  "outputDirectory": "app/public",
+  "regions": ["pdx1"],
+  "functions": {
+    "api/index.mjs": { "maxDuration": 30, "includeFiles": "app/{lib/**,server.mjs}" }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index.mjs" },
+    { "source": "/qr.svg", "destination": "/api/index.mjs" }
+  ],
+  "headers": [
+    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }, { "key": "Service-Worker-Allowed", "value": "/" }] },
+    { "source": "/(.*)", "headers": [{ "key": "X-Content-Type-Options", "value": "nosniff" }] }
+  ]
+}

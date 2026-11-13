@@ -1,0 +1,7 @@
+identidade
+app/data
+app/data-prod
+app/test
+app/deploy
+app/tunnel.mjs
+*.bat
